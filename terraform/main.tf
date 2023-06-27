@@ -1,14 +1,14 @@
 terraform {
-  required_version = {
+  required_providers {
     aws = {
-        source = "hashicorp/aws"
-        version = "~> 4.0"
+      source  = "hashicorp/aws"
+      version = "~> 4.0"
     }
   }
 }
 
 provider "aws" {
-    region = "us-east-1"
+  region = "us-east-1"
 }
 
 # Create an S3 Bucket
@@ -22,42 +22,38 @@ resource "aws_s3_bucket" "cloud-resume-challenge-6242023" {
 
 #Create a bucket ACL - Access Control List
 resource "aws_s3_bucket_acl" "crc-6242023-acl" {
-    bucket = aws_s3_bucket.cloud-resume-challenge-6242023.id
-    acl = "private"
+  bucket = aws_s3_bucket.cloud-resume-challenge-6242023.id
+  acl    = "private"
+}
 
-    index_document {
-        suffix = "index.html"
-    }
+locals {
+  s3_origin_id = "myS3Origin"
+}
 
-    error_document {
-        key = "error.html"
-    }
-
-    locals {
-        s3_origin_id = "mys3origin"
-    }
-
-    tags = {
-      Name = "Static Website Bucket"
-    }
+resource "aws_cloudfront_origin_access_control" "dcg_cf_origin" {
+  name                              = "cfc_dcgplayroom_origin_access"
+  description                       = "Origin Access Control Policy"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 
 }
+
 resource "aws_cloudfront_distribution" "cloud-resume-challenge-cf" {
-  enabled = true
-  is_ipv6_enabled = true
-  comment = "Static website distribution"
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "Static website distribution"
   default_root_object = "index.html"
 
   origin {
-    domain_name = aws_s3_bucket.cloud-resume-challenge-6242023.website_endpoint
-    origin_id = "s3Origin"
+    domain_name              = aws_s3_bucket.cloud-resume-challenge-6242023.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.dcg_cf_origin.id
+    origin_id                = local.s3_origin_id
   }
 
-  aliases = "resume.dcgplayroom.com"
-
   default_cache_behavior {
-    allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods = ["GET", "HEAD"]
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
     target_origin_id = local.s3_origin_id
     forwarded_values {
       query_string = false
@@ -87,30 +83,24 @@ resource "aws_cloudfront_distribution" "cloud-resume-challenge-cf" {
 }
 
 resource "aws_acm_certificate" "public_certificate" {
-  domain_name = "*.dcgplayroom.com"
+  domain_name       = "*.dcgplayroom.com"
   validation_method = "DNS"
 
   tags = {
     Name = "Public Certificate for CRC"
   }
 }
-resource "aws_route53_record" "dcg_rt53_record" {       
-  for_each = {
-    for dvo in aws_acmaws_acm_certificate.public_certificate.domain_validation_options : dvo.domain_name => {
-        name = dvo.resource_record_name
-        record = dvo.resource_record_name
-        type = dvo.resource_record_type
-    }
-  }
+
+resource "aws_route53_record" "dcg_rt53_record" {
   allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
+  name            = "resume.dcgplayroom.com"
+  records         = aws_cloudfront_distribution.cloud-resume-challenge-cf
+  ttl             = 300
+  type            = "A"
   zone_id         = data.aws_route53_zone.dcgplayroom_rt53
 }
 
 resource "aws_acm_certificate_validation" "public_acm_certificate" {
-  certificate_arn = aws_acm_certificate.public_certificate.arn
-  validation_record_fqdns = [for record in awsaws_route53_record.dcg_rt53_record : record.fqdn]
+  certificate_arn         = aws_acm_certificate.public_certificate.arn
+  validation_record_fqdns = [for record in aws_route53_record.dcg_rt53_record : record.fqdn]
 }
