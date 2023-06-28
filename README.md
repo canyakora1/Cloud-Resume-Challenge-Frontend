@@ -2,7 +2,7 @@
 
 ## Architectural Diagram ##
 
-![frontend diagram](../Cloud-Resume-Challenge-Frontend/pics/cloud-resume-challenge-frontend.png)
+![frontend diagram](./pics/cloud-resume-challenge-frontend.jpg)
 
 ## Description ##
 
